@@ -1,0 +1,77 @@
+﻿@page "/"
+@using BlazorStrap;
+@using WhoWhatWhere.Data;
+@inject IBlazorStrap _blazorStrap
+@inject NavigationManager _nav
+@inject GameService GameService
+
+<PageTitle>Who? What? Where?</PageTitle>
+
+<BSToaster Position="Position.Default" />
+
+<h3>What is your name?</h3>
+
+<BSInput maxlength="25" spellcheck="false" style="width:fit-content" InputType="InputType.Text" @bind-Value=PlayerName onkeypress="return (event.charCode !=8 && event.charCode == 0 || event.charCode == 32 || (event.charCode >= 48 && event.charCode <= 57) || (event.charCode >= 65 && event.charCode <= 90) || (event.charCode >= 97 && event.charCode <= 122))" />
+
+<h3>Enter a game code to join a game:</h3>
+
+<BSInput maxlength="5" spellcheck="false" style="width:fit-content" Class="text-uppercase" InputType="InputType.Text" @bind-Value=GameCode onkeypress="return (event.charCode != 8 && event.charCode == 0 || (event.charCode >= 48 && event.charCode <= 57) || (event.charCode >= 65 && event.charCode <= 90) || (event.charCode >= 97 && event.charCode <= 122))" />
+
+<button class="btn btn-primary" @onclick="JoinGame_OnClick">Join Game</button>
+
+<h3>Or create a new game:</h3>
+
+<button class="btn btn-primary" @onclick="NewGame_OnClick">New Game</button>
+
+@code {
+    private string? GameCode { get; set; }
+    private string? PlayerName { get; set; }
+
+    private async Task JoinGame_OnClick()
+    {
+        if (string.IsNullOrEmpty(GameCode) || GameCode.Length != 5)
+        {
+            Alert("Invalid Game Code", BSColor.Danger);
+        }
+        else if (string.IsNullOrEmpty(PlayerName))
+        {
+            Alert("Missing Name", BSColor.Danger);
+        }
+        else
+        {
+            var errorMessage = await GameService.ValidateJoinGame(GameCode, PlayerName);
+            if (string.IsNullOrEmpty(errorMessage))
+            {
+                _nav.NavigateTo($"/game/{GameCode}/{PlayerName}");
+            }
+            else
+            {
+                Alert(errorMessage, BSColor.Danger);
+            }
+        }
+    }
+
+    private async Task NewGame_OnClick()
+    {
+        if (string.IsNullOrEmpty(PlayerName))
+        {
+            Alert("Missing Name", BSColor.Danger);
+        }
+        else
+        {
+            var gameCode = await GameService.CreateGame();
+            _nav.NavigateTo($"/game/{gameCode}/{PlayerName}");
+        }
+    }
+
+    protected void Alert(string message, BSColor color)
+    {
+        _blazorStrap.Toaster.Add(message, o =>
+        {
+            o.Color = color;
+            o.CloseAfter = 3000;
+            o.Toast = Toast.Default;
+            o.HasIcon = true;
+        });
+    }
+}

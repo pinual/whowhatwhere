@@ -1,0 +1,225 @@
+﻿@page "/game/{gamecode}/{playername}"
+@using BlazorStrap;
+@using WhoWhatWhere.Data
+@inject IBlazorStrap _blazorStrap
+@inject GameService GameService
+
+<PageTitle>Who? What? Where?</PageTitle>
+
+<BSToaster Position="Position.Default" />
+
+<h3>Game Code: @GameCode</h3>
+
+<h3>Welcome @PlayerName</h3>
+
+<div class="mb-3">
+    @if (CurrentGame.DealComplete)
+    {
+        <h4>You Sent</h4>
+    }
+
+    <h4>Who:</h4>
+    <BSInput InputType="InputType.Text" spellcheck="true" style="width:250px" placeholder="Name of a specific person" @bind-Value=PlayerWho IsReadonly=CurrentGame.DealComplete />
+
+    <h4>What:</h4>
+    <BSInput InputType="InputType.Text" spellcheck="true" style="width:250px" placeholder="What the person is doing" @bind-Value=PlayerWhat IsReadonly=CurrentGame.DealComplete />
+
+    <h4>Where:</h4>
+    <BSInput InputType="InputType.Text" spellcheck="true" style="width:250px" placeholder="Place this is happening" @bind-Value=PlayerWhere IsReadonly=CurrentGame.DealComplete />
+
+    @if (!CurrentGame.DealComplete)
+    {
+        <BSButton Color="BSColor.Primary" @onclick="Submit_OnClick">Submit</BSButton>
+    }
+</div>
+
+<div>
+    @if (!CurrentGame.DealComplete && CurrentGame.Players.First().Name == PlayerName)
+    {
+        var btnColor = BSColor.Success;
+        @if (!DealOverride && (CurrentGame.Players.Any(x => string.IsNullOrEmpty(x.MyWho))))
+        {
+            btnColor = BSColor.Secondary;
+        }
+        <div class="mb-3" style="width:fit-content">
+            <BSButton Color=btnColor @onclick="Deal_OnClick">Deal</BSButton>
+            <BSInputSwitch CheckedValue="@true" UnCheckedValue="@false" @bind-Value=DealOverride>
+                Skip players who are not ready.
+            </BSInputSwitch>
+        </div>
+    }
+</div>
+
+<div>
+    @if (CurrentGame.DealComplete)
+    {
+        <h4>You Recieved</h4>
+        var player = CurrentGame.Players.Find(x => x.Name == PlayerName);
+        if (string.IsNullOrEmpty(player?.RecWho))
+        {
+            <h4>Sorry! The deal was completed without you.</h4>
+        }
+        else
+        {
+            <h4>Who:</h4>
+            <BSLabel>@player?.RecWho</BSLabel>
+            <h4>What:</h4>
+            <BSLabel>@player?.RecWhat</BSLabel>
+            <h4>Where:</h4>
+            <BSLabel>@player?.RecWhere</BSLabel>
+        }
+    }
+    else
+    {
+        <BSTable style="width:fit-content">
+            <caption>List of players</caption>
+            <BSTHead>
+                <BSTR>
+                    <BSTD>Player</BSTD>
+                    <BSTD>Name</BSTD>
+                    <BSTD>Ready</BSTD>
+                </BSTR>
+            </BSTHead>
+            <BSTBody>
+                @if (CurrentGame != null)
+                {
+                    @foreach (var player in CurrentGame.Players)
+                    {
+                        <BSTR>
+                            <BSTD><BSBadge Color="BSColor.Info" IsPill="true">@(CurrentGame.Players.IndexOf(player) + 1)</BSBadge></BSTD>
+                                <BSTD>@player.Name</BSTD>
+                                <BSTD>
+                                    @if (string.IsNullOrEmpty(player.MyWho) || string.IsNullOrEmpty(player.MyWhat) || string.IsNullOrEmpty(player.MyWhere))
+                                {
+                                    <BSSpinner Color="BSColor.Primary" />
+                                }
+                                else
+                                {
+                                    <BSBadge Color="BSColor.Success" IsPill="true">✔</BSBadge>
+                                }
+                            </BSTD>
+                        </BSTR>
+                    }
+                }
+            </BSTBody>
+        </BSTable>
+    }
+</div>
+@code {
+    [Parameter]
+    public required string GameCode { get; set; }
+
+    [Parameter]
+    public required string PlayerName { get; set; }
+
+    public string? PlayerWho { get; set; }
+    public string? PlayerWhat { get; set; }
+    public string? PlayerWhere { get; set; }
+    public string? SubmitErrorMessage { get; set; }
+
+    private Data.Game? CurrentGame;
+
+    private readonly System.Timers.Timer timer = new();
+
+    private bool DealComplete { get; set; } = false;
+    private bool DealOverride { get; set; } = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentGame = await GameService.GetGameAsync(GameCode);
+        if(CurrentGame != null && !CurrentGame.Players.Exists(x => x.Name == PlayerName))
+        {
+            await CurrentGame.AddPlayer(PlayerName);
+            StateHasChanged();
+        }
+
+        timer.Interval = 100;
+        timer.Elapsed += Timer_Elapsed;
+        timer.Start();
+    }
+
+    private void Timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Submit_OnClick()
+    {
+        if (string.IsNullOrEmpty(PlayerWho))
+        {
+            Alert("Missing Who", BSColor.Danger);
+        }
+        else if (string.IsNullOrEmpty(PlayerWhat))
+        {
+            Alert("Missing What", BSColor.Danger);
+        }
+        else if (string.IsNullOrEmpty(PlayerWhere))
+        {
+            Alert("Missing Where", BSColor.Danger);
+        }
+        else
+        {
+            var player = CurrentGame.Players.Find(x => x.Name == PlayerName);
+            player.MyWho = PlayerWho;
+            player.MyWhat = PlayerWhat;
+            player.MyWhere = PlayerWhere;
+
+            Alert("Got it!", BSColor.Success);
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task Deal_OnClick()
+    {
+        if (!DealOverride && (CurrentGame.Players.Any(x => string.IsNullOrEmpty(x.MyWho))))
+        {
+            Alert("Players Are Not Ready", BSColor.Danger);
+        }
+        else
+        {
+            if (CurrentGame.Players.Count(x => !string.IsNullOrEmpty(x.MyWho)) < 2)
+            {
+                Alert("At Least 2 Players Must Be Ready", BSColor.Danger);
+            }
+            else
+            {
+                Alert("Dealing", BSColor.Success);
+                await Deal();    
+            }
+        }
+    }
+
+    protected async Task Deal()
+    {
+        var random = new Random();
+        var randPlayers = CurrentGame.Players.Where(x => !string.IsNullOrEmpty(x.MyWho)).OrderBy(x => random.Next()).ToList();
+        for(var i = 0; i < randPlayers.Count; i++)
+        {
+            randPlayers[i].RecWho = randPlayers[(i + 1) % randPlayers.Count].MyWho;
+        }
+        randPlayers = CurrentGame.Players.Where(x => !string.IsNullOrEmpty(x.MyWho)).OrderBy(x => random.Next()).ToList();
+        for (var i = 0; i < randPlayers.Count; i++)
+        {
+            randPlayers[i].RecWhat = randPlayers[(i + 1) % randPlayers.Count].MyWhat;
+        }
+        randPlayers = CurrentGame.Players.Where(x => !string.IsNullOrEmpty(x.MyWho)).OrderBy(x => random.Next()).ToList();
+        for (var i = 0; i < randPlayers.Count; i++)
+        {
+            randPlayers[i].RecWhere = randPlayers[(i + 1) % randPlayers.Count].MyWhere;
+        }
+        CurrentGame.DealComplete = true;
+        await GameService.DeleteGame(CurrentGame.Id);
+    }
+
+    protected void Alert(string message, BSColor color)
+    {
+        _blazorStrap.Toaster.Add(message, o =>
+        {
+            o.Color = color;
+            o.CloseAfter = 3000;
+            o.Toast = Toast.Default;
+            o.HasIcon = true;
+        });
+    }
+}
