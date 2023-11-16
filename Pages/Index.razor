@@ -39,6 +39,7 @@
         }
         else
         {
+            GameCode = GameCode.ToUpper();
             var errorMessage = await GameService.ValidateJoinGame(GameCode, PlayerName);
             if (string.IsNullOrEmpty(errorMessage))
             {
