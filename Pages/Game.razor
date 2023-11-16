@@ -3,6 +3,7 @@
 @using WhoWhatWhere.Data
 @inject IBlazorStrap _blazorStrap
 @inject GameService GameService
+@inject NavigationManager _nav
 
 <PageTitle>Who? What? Where?</PageTitle>
 
@@ -127,7 +128,11 @@
     protected override async Task OnInitializedAsync()
     {
         CurrentGame = await GameService.GetGameAsync(GameCode);
-        if(CurrentGame != null && !CurrentGame.Players.Exists(x => x.Name == PlayerName))
+        if(CurrentGame == null)
+        {
+            _nav.NavigateTo($"/");
+        }
+        else if(!CurrentGame.Players.Exists(x => x.Name == PlayerName))
         {
             await CurrentGame.AddPlayer(PlayerName);
             StateHasChanged();
